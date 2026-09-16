@@ -1,0 +1,98 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Vazirmatn', 'Tahoma', 'sans-serif'],
+      },
+      colors: {
+        primary: {
+          50: 'oklch(97% 0.02 250)',
+          100: 'oklch(93% 0.04 250)',
+          200: 'oklch(88% 0.06 250)',
+          300: 'oklch(80% 0.08 250)',
+          400: 'oklch(68% 0.10 250)',
+          500: 'oklch(58% 0.13 250)',
+          600: 'oklch(50% 0.14 250)',
+          700: 'oklch(45% 0.15 250)',
+          800: 'oklch(38% 0.12 250)',
+          900: 'oklch(30% 0.10 250)',
+          950: 'oklch(22% 0.08 250)',
+        },
+        accent: {
+          50: 'oklch(96% 0.02 180)',
+          100: 'oklch(90% 0.04 180)',
+          200: 'oklch(82% 0.06 180)',
+          300: 'oklch(72% 0.08 180)',
+          400: 'oklch(62% 0.10 180)',
+          500: 'oklch(52% 0.11 180)',
+          600: 'oklch(44% 0.10 180)',
+          700: 'oklch(38% 0.09 180)',
+          800: 'oklch(32% 0.07 180)',
+          900: 'oklch(26% 0.06 180)',
+        },
+        success: {
+          50: 'oklch(96% 0.02 145)',
+          100: 'oklch(90% 0.05 145)',
+          200: 'oklch(82% 0.08 145)',
+          300: 'oklch(72% 0.10 145)',
+          400: 'oklch(62% 0.12 145)',
+          500: 'oklch(52% 0.13 145)',
+          600: 'oklch(44% 0.11 145)',
+          700: 'oklch(38% 0.10 145)',
+          800: 'oklch(32% 0.08 145)',
+          900: 'oklch(26% 0.06 145)',
+        },
+        warning: {
+          50: 'oklch(96% 0.02 85)',
+          100: 'oklch(90% 0.06 85)',
+          200: 'oklch(82% 0.09 85)',
+          300: 'oklch(74% 0.12 85)',
+          400: 'oklch(66% 0.14 85)',
+          500: 'oklch(58% 0.13 85)',
+          600: 'oklch(50% 0.12 85)',
+          700: 'oklch(42% 0.10 85)',
+          800: 'oklch(35% 0.08 85)',
+          900: 'oklch(28% 0.06 85)',
+        },
+        danger: {
+          50: 'oklch(96% 0.02 25)',
+          100: 'oklch(90% 0.05 25)',
+          200: 'oklch(82% 0.08 25)',
+          300: 'oklch(72% 0.11 25)',
+          400: 'oklch(62% 0.13 25)',
+          500: 'oklch(52% 0.14 25)',
+          600: 'oklch(44% 0.13 25)',
+          700: 'oklch(38% 0.12 25)',
+          800: 'oklch(32% 0.10 25)',
+          900: 'oklch(26% 0.08 25)',
+        },
+      },
+      boxShadow: {
+        card: '0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06)',
+        'card-hover': '0 4px 12px -2px rgb(0 0 0 / 0.10), 0 2px 6px -2px rgb(0 0 0 / 0.06)',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.3s ease-out',
+        'slide-in': 'slideIn 0.3s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideIn: {
+          '0%': { transform: 'translateX(20px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+      },
+    },
+  },
+  plugins: [],
+};
