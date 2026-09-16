@@ -1,10 +1,14 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Search } from 'lucide-react';
+import { Bell, LogOut, Search, Menu } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 
-export default function Header() {
+interface HeaderProps {
+  onMenuClick: () => void;
+}
+
+export default function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -17,6 +21,13 @@ export default function Header() {
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-20">
       <div className="flex items-center gap-4">
+        <button
+          onClick={onMenuClick}
+          className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors lg:hidden"
+          title="منو"
+        >
+          <Menu size={22} />
+        </button>
         <div className="relative hidden md:block">
           <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input

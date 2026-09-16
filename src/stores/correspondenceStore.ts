@@ -7,6 +7,9 @@ import type {
 } from '@/types';
 import { mockCorrespondence } from '@/mocks/data';
 import { daysUntilDeadline } from '@/utils/jalali';
+import { syncAlerts } from '@/utils/alerts';
+import { persist } from 'zustand/middleware';
+import { useNotificationStore } from './notificationStore';
 
 export interface CorrespondenceFilters {
   type: CorrespondenceType | 'all';
@@ -20,7 +23,9 @@ interface CorrespondenceState {
   items: CorrespondenceItem[];
   filters: CorrespondenceFilters;
   setFilters: (filters: Partial<CorrespondenceFilters>) => void;
-  addItem: (item: Omit<CorrespondenceItem, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void;
+  addItem: (
+    item: Omit<CorrespondenceItem, 'id' | 'createdAt' | 'updatedAt' | 'status'>,
+  ) => string;
   updateItem: (id: string, updates: Partial<CorrespondenceItem>) => void;
   deleteItem: (id: string) => void;
   completeItem: (
@@ -34,7 +39,6 @@ interface CorrespondenceState {
     },
   ) => void;
   refreshStatuses: () => void;
-  getFiltered: () => CorrespondenceItem[];
 }
 
 function computeStatus(deadline: string, responseDate: string | null): CorrespondenceStatus {
@@ -46,8 +50,10 @@ function computeStatus(deadline: string, responseDate: string | null): Correspon
   return 'in_progress';
 }
 
-export const useCorrespondenceStore = create<CorrespondenceState>((set, get) => ({
-  items: mockCorrespondence,
+export const useCorrespondenceStore = create<CorrespondenceState>()(
+  persist(
+    (set, get) => ({
+      items: mockCorrespondence,
   filters: {
     type: 'all',
     unitId: 'all',
@@ -57,19 +63,23 @@ export const useCorrespondenceStore = create<CorrespondenceState>((set, get) => 
   },
   setFilters: (newFilters) =>
     set((state) => ({ filters: { ...state.filters, ...newFilters } })),
-  addItem: (item) =>
+  addItem: (item) => {
+    const id = `c${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     set((state) => ({
       items: [
         ...state.items,
         {
           ...item,
-          id: `c${Date.now()}`,
+          id,
           status: computeStatus(item.deadline, null),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
       ],
-    })),
+    }));
+    syncAlerts();
+    return id;
+  },
   updateItem: (id, updates) =>
     set((state) => ({
       items: state.items.map((item) =>
@@ -85,11 +95,13 @@ export const useCorrespondenceStore = create<CorrespondenceState>((set, get) => 
           : item,
       ),
     })),
-  deleteItem: (id) =>
+  deleteItem: (id) => {
     set((state) => ({
       items: state.items.filter((item) => item.id !== id),
-    })),
-  completeItem: (id, response) =>
+    }));
+    useNotificationStore.getState().removeForItem(id);
+  },
+  completeItem: (id, response) => {
     set((state) => ({
       items: state.items.map((item) =>
         item.id === id
@@ -101,23 +113,27 @@ export const useCorrespondenceStore = create<CorrespondenceState>((set, get) => 
             }
           : item,
       ),
-    })),
-  refreshStatuses: () =>
-    set((state) => ({
-      items: state.items.map((item) => ({
-        ...item,
-        status: item.status === 'completed' ? 'completed' : computeStatus(item.deadline, item.responseDate),
-      })),
-    })),
-  getFiltered: () => {
-    const { items, filters } = get();
-    return items.filter((item) => {
-      if (filters.type !== 'all' && item.type !== filters.type) return false;
-      if (filters.unitId !== 'all' && item.targetUnitId !== filters.unitId) return false;
-      if (filters.status !== 'all' && item.status !== filters.status) return false;
-      if (filters.dateFrom && new Date(item.issueDate) < new Date(filters.dateFrom)) return false;
-      if (filters.dateTo && new Date(item.issueDate) > new Date(filters.dateTo)) return false;
-      return true;
-    });
+    }));
+    syncAlerts();
   },
-}));
+  refreshStatuses: () => {
+    set((state) => {
+      let changed = false;
+      const next = state.items.map((item) => {
+        const status =
+          item.status === 'completed'
+            ? 'completed'
+            : computeStatus(item.deadline, item.responseDate);
+        if (status !== item.status) changed = true;
+        return status === item.status ? item : { ...item, status };
+      });
+      return changed ? { items: next } : {};
+    });
+    syncAlerts();
+  },
+    }),
+    {
+      name: 'correspondence-storage',
+    },
+  ),
+);

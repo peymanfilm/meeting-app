@@ -25,6 +25,11 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
+    // مقادیر پیش‌فرض: هر بار نیازی به تایپ مجدد نیست
+    defaultValues: {
+      username: 'moaven',
+      password: '123456',
+    },
   });
 
   const onSubmit = (data: FormData) => {
@@ -113,7 +118,8 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-6 border-t border-gray-100">
             <p className="text-xs text-gray-400 text-center">
-              کاربران نمونه: moaven / modir_pajoohesh (رمز: ۱۲۳۴۵۶)
+              ورود پیش‌فرض: <span dir="ltr" className="font-mono">moaven / 123456</span> (معاون) — مدیران:{' '}
+              <span dir="ltr" className="font-mono">modir_pajoohesh</span> و غیره (رمز: ۱۲۳۴۵۶)
             </p>
           </div>
         </div>

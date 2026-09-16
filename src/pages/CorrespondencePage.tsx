@@ -31,10 +31,16 @@ const rowColors: Record<CorrespondenceStatus, string> = {
 
 interface CorrespondencePageProps {
   defaultType?: CorrespondenceType | 'all';
+  /** When provided (e.g. orders route), restricts the module to these types */
+  defaultTypes?: CorrespondenceType[];
   title?: string;
 }
 
-export default function CorrespondencePage({ defaultType = 'all', title }: CorrespondencePageProps) {
+export default function CorrespondencePage({
+  defaultType = 'all',
+  defaultTypes,
+  title,
+}: CorrespondencePageProps) {
   const { items, filters, setFilters, deleteItem } = useCorrespondenceStore();
   const { units } = useSettingsStore();
   const user = useAuthStore((s) => s.user);
@@ -45,22 +51,18 @@ export default function CorrespondencePage({ defaultType = 'all', title }: Corre
   const [completeItem, setCompleteItem] = useState<CorrespondenceItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const effectiveFilters = {
-    ...filters,
-    type: defaultType === 'all' ? filters.type : defaultType,
-  };
-
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       if (user?.role === 'manager' && item.targetUnitId !== user.unitId) return false;
-      if (effectiveFilters.type !== 'all' && item.type !== effectiveFilters.type) return false;
-      if (effectiveFilters.unitId !== 'all' && item.targetUnitId !== effectiveFilters.unitId) return false;
-      if (effectiveFilters.status !== 'all' && item.status !== effectiveFilters.status) return false;
-      if (effectiveFilters.dateFrom && new Date(item.issueDate) < new Date(effectiveFilters.dateFrom)) return false;
-      if (effectiveFilters.dateTo && new Date(item.issueDate) > new Date(effectiveFilters.dateTo)) return false;
+      if (defaultTypes && !defaultTypes.includes(item.type)) return false;
+      if (filters.type !== 'all' && item.type !== filters.type) return false;
+      if (filters.unitId !== 'all' && item.targetUnitId !== filters.unitId) return false;
+      if (filters.status !== 'all' && item.status !== filters.status) return false;
+      if (filters.dateFrom && new Date(item.issueDate) < new Date(filters.dateFrom)) return false;
+      if (filters.dateTo && new Date(item.issueDate) > new Date(filters.dateTo)) return false;
       return true;
     });
-  }, [items, effectiveFilters, user]);
+  }, [items, filters, user, defaultTypes]);
 
   const pageTitle = title || 'مدیریت مکاتبات و پیگیری‌ها';
 
@@ -102,12 +104,17 @@ export default function CorrespondencePage({ defaultType = 'all', title }: Corre
             <div>
               <label className="label">نوع</label>
               <select
-                value={effectiveFilters.type}
+                value={filters.type}
                 onChange={(e) => setFilters({ type: e.target.value as CorrespondenceType | 'all' })}
                 className="input"
               >
                 <option value="all">همه</option>
-                {Object.entries(CORRESPONDENCE_TYPE_LABELS).map(([val, label]) => (
+                {(defaultTypes
+                  ? (Object.entries(CORRESPONDENCE_TYPE_LABELS) as [CorrespondenceType, string][]).filter(
+                      ([val]) => defaultTypes.includes(val),
+                    )
+                  : Object.entries(CORRESPONDENCE_TYPE_LABELS)
+                ).map(([val, label]) => (
                   <option key={val} value={val}>{label}</option>
                 ))}
               </select>
@@ -115,7 +122,7 @@ export default function CorrespondencePage({ defaultType = 'all', title }: Corre
             <div>
               <label className="label">واحد</label>
               <select
-                value={effectiveFilters.unitId}
+                value={filters.unitId}
                 onChange={(e) => setFilters({ unitId: e.target.value })}
                 className="input"
               >
@@ -128,7 +135,7 @@ export default function CorrespondencePage({ defaultType = 'all', title }: Corre
             <div>
               <label className="label">وضعیت</label>
               <select
-                value={effectiveFilters.status}
+                value={filters.status}
                 onChange={(e) => setFilters({ status: e.target.value as CorrespondenceStatus | 'all' })}
                 className="input"
               >
@@ -144,8 +151,17 @@ export default function CorrespondencePage({ defaultType = 'all', title }: Corre
               <label className="label">از تاریخ</label>
               <input
                 type="date"
-                value={effectiveFilters.dateFrom || ''}
+                value={filters.dateFrom || ''}
                 onChange={(e) => setFilters({ dateFrom: e.target.value || null })}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="label">تا تاریخ</label>
+              <input
+                type="date"
+                value={filters.dateTo || ''}
+                onChange={(e) => setFilters({ dateTo: e.target.value || null })}
                 className="input"
               />
             </div>
@@ -253,7 +269,13 @@ export default function CorrespondencePage({ defaultType = 'all', title }: Corre
         </div>
       </div>
 
-      <CorrespondenceForm open={showForm} onClose={() => setShowForm(false)} defaultType={defaultType === 'all' ? 'correspondence' : defaultType} />
+      <CorrespondenceForm
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        defaultType={
+          defaultType === 'all' ? (defaultTypes ? defaultTypes[0] : 'correspondence') : defaultType
+        }
+      />
 
       <CompleteModal
         open={!!completeItem}

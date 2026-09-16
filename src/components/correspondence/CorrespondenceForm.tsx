@@ -1,28 +1,16 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { useCorrespondenceStore } from '@/stores/correspondenceStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
 import Modal from '@/components/ui/Modal';
 import { jalaliToIso, todayJalali } from '@/utils/jalali';
+import { correspondenceSchema } from '@/utils/schemas';
 import type { CorrespondenceType, Priority } from '@/types';
 import { CORRESPONDENCE_TYPE_LABELS, PRIORITY_LABELS } from '@/types';
 
-const schema = z.object({
-  type: z.enum(['correspondence', 'decision', 'verbal_order', 'directive']),
-  referenceNumber: z.string().optional(),
-  issueDate: z.string().min(1, 'تاریخ صدور الزامی است'),
-  subject: z.string().min(3, 'موضوع حداقل ۳ کاراکتر است'),
-  issuerName: z.string().min(2, 'صادرکننده الزامی است'),
-  targetUnitId: z.string().min(1, 'مخاطب الزامی است'),
-  description: z.string().min(5, 'شرح حداقل ۵ کاراکتر است'),
-  deadline: z.string().min(1, 'مهلت الزامی است'),
-  priority: z.enum(['normal', 'important', 'urgent']),
-  attachmentPath: z.string().optional(),
-});
-
-type FormData = z.infer<typeof schema>;
+type FormData = z.infer<typeof correspondenceSchema>;
 
 interface CorrespondenceFormProps {
   open: boolean;
@@ -42,7 +30,7 @@ export default function CorrespondenceForm({ open, onClose, defaultType = 'corre
     reset,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(correspondenceSchema),
     defaultValues: {
       type: defaultType,
       issueDate: todayJalali(),

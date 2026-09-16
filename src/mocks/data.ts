@@ -494,6 +494,11 @@ export const defaultScoringSettings: ScoringSettings = {
   timeWeightPercent: 40,
   preWarningDays: 3,
   warningDays: 1,
+  qualityIndicatorWeights: {
+    completeness: 3,
+    accuracy: 3,
+    documentation: 2,
+  },
   rankThresholds: [
     { label: 'ممتاز', minScore: 90, color: '#16a34a' },
     { label: 'خوب', minScore: 75, color: '#0891b2' },

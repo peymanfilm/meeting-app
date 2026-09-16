@@ -35,9 +35,11 @@ const adminNav = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** Called when a nav link is clicked (closes the mobile drawer) */
+  onNavigate?: () => void;
 }
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const unreadCount = useNotificationStore((s) =>
     user ? s.getUnreadCount(user.id) : 0,
@@ -88,7 +90,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {mainNav.map((item) => {
           const Icon = item.icon;
           return (
-            <NavLink key={item.to} to={item.to} className={navItemClass} end>
+            <NavLink key={item.to} to={item.to} className={navItemClass} end onClick={onNavigate}>
               <Icon size={20} className="shrink-0" />
               {!collapsed && <span>{item.label}</span>}
               {!collapsed && item.to === '/notifications' && unreadCount > 0 && (
@@ -113,7 +115,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {adminNav.map((item) => {
               const Icon = item.icon;
               return (
-                <NavLink key={item.to} to={item.to} className={navItemClass} end>
+                <NavLink key={item.to} to={item.to} className={navItemClass} end onClick={onNavigate}>
                   <Icon size={20} className="shrink-0" />
                   {!collapsed && <span>{item.label}</span>}
                 </NavLink>

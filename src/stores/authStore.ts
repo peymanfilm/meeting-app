@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User } from '@/types';
-import { mockUsers } from '@/mocks/data';
+import { useSettingsStore } from './settingsStore';
 
 interface AuthState {
   user: User | null;
   token: string | null;
+  /** Mock JWT — later replaced by POST /auth/login (NestJS) */
   login: (username: string, password: string) => { success: boolean; error?: string };
   logout: () => void;
   updateUser: (user: User) => void;
@@ -13,16 +14,17 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       token: null,
       login: (username, password) => {
-        const user = mockUsers.find((u) => u.username === username && u.isActive);
+        const { users, passwords } = useSettingsStore.getState();
+        const user = users.find((u) => u.username === username.trim() && u.isActive);
         if (!user) {
           return { success: false, error: 'نام کاربری یا رمز عبور اشتباه است' };
         }
-        if (password.length < 3) {
-          return { success: false, error: 'رمز عبور اشتباه است' };
+        if (passwords[username.trim()] !== password) {
+          return { success: false, error: 'نام کاربری یا رمز عبور اشتباه است' };
         }
         const token = `mock-jwt-${user.id}-${Date.now()}`;
         set({ user, token });

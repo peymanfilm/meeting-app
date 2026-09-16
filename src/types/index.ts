@@ -119,6 +119,12 @@ export interface ScoringSettings {
   timeWeightPercent: number; // e.g. 40
   preWarningDays: number;
   warningDays: number;
+  /** Relative weight of each quality indicator (sum is normalized, values 1-10) */
+  qualityIndicatorWeights: {
+    completeness: number; // کامل بودن پاسخ
+    accuracy: number; // دقت و صحت محتوا
+    documentation: number; // ارائه مستندات پشتیبان
+  };
   rankThresholds: RankThreshold[];
   penaltyConfig: PenaltyConfig;
   alertTemplates: {
@@ -194,3 +200,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'معاون',
   manager: 'مدیر کل',
 };
+
+export const QUALITY_INDICATOR_LABELS = {
+  completeness: 'کامل بودن پاسخ',
+  accuracy: 'دقت و صحت محتوا',
+  documentation: 'ارائه مستندات پشتیبان',
+} as const;

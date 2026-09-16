@@ -96,3 +96,48 @@
     @apply text-gray-600 hover:bg-gray-100;
   }
 }
+
+/* PDF export (react-to-print) — clean static layout */
+@media print {
+  body {
+    background-color: white !important;
+  }
+
+  aside,
+  header,
+  nav {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+    break-inside: avoid;
+  }
+
+  .table-wrapper {
+    overflow: visible !important;
+  }
+
+  .sticky-table-header th {
+    position: static !important;
+    background-color: oklch(45% 0.15 250) !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .animate-fade-in,
+  .animate-slide-in,
+  .animate-scale-in {
+    animation: none !important;
+  }
+}

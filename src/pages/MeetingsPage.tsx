@@ -1,6 +1,17 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { Plus, CalendarDays, MapPin, Clock, Users, ClipboardList, Trash2, Eye, Link2 } from 'lucide-react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Plus,
+  CalendarDays,
+  MapPin,
+  Clock,
+  Users,
+  ClipboardList,
+  Trash2,
+  Eye,
+  Link2,
+} from 'lucide-react';
 import { useMeetingStore } from '@/stores/meetingStore';
 import { useCorrespondenceStore } from '@/stores/correspondenceStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -8,21 +19,14 @@ import { useAuthStore } from '@/stores/authStore';
 import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { toJalaliWithTime, toJalali, jalaliToIso, todayJalali } from '@/utils/jalali';
+import { meetingSchema } from '@/utils/schemas';
+import type { z } from 'zod';
 import type { Meeting } from '@/types';
 
-interface MeetingFormData {
-  title: string;
-  location: string;
-  datetime: string;
-  duration: number;
-  agenda: string;
-  participantIds: string[];
-  relatedItemId: string;
-  decisions: { content: string; responsibleUnitId: string; deadline: string }[];
-}
+type MeetingFormData = z.infer<typeof meetingSchema>;
 
 export default function MeetingsPage() {
-  const { meetings, addMeeting, deleteMeeting } = useMeetingStore();
+  const { meetings, addMeeting, addDecision, deleteMeeting } = useMeetingStore();
   const { items, addItem } = useCorrespondenceStore();
   const { units, users, periods } = useSettingsStore();
   const user = useAuthStore((s) => s.user);
@@ -30,7 +34,6 @@ export default function MeetingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [viewMeeting, setViewMeeting] = useState<Meeting | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [decisions, setDecisions] = useState<MeetingFormData['decisions']>([]);
 
   const activePeriod = periods.find((p) => !p.isClosed);
 
@@ -38,48 +41,64 @@ export default function MeetingsPage() {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<MeetingFormData>({
+    resolver: zodResolver(meetingSchema),
     defaultValues: {
-      datetime: todayJalali(),
+      date: todayJalali(),
+      time: '08:00',
       duration: 60,
       participantIds: [],
       relatedItemId: '',
+      agenda: '',
       decisions: [],
     },
   });
 
-  const visibleMeetings =
-    user?.role === 'admin'
-      ? meetings
-      : meetings.filter(
-          (m) => m.participantIds.includes(user?.id || '') || m.createdBy === user?.id,
-        );
+  const { fields, append, remove } = useFieldArray({ control, name: 'decisions' });
+
+  const openNew = () => {
+    reset({
+      title: '',
+      location: '',
+      date: todayJalali(),
+      time: '08:00',
+      duration: 60,
+      agenda: '',
+      relatedItemId: '',
+      participantIds: [],
+      decisions: [],
+    });
+    setShowForm(true);
+  };
 
   const onSubmit = (data: MeetingFormData) => {
+    const datetime = jalaliToIso(data.date, data.time);
+
     const newMeeting = addMeeting({
       title: data.title,
       location: data.location,
-      datetime: jalaliToIso(data.datetime),
+      datetime,
       duration: Number(data.duration),
-      agenda: data.agenda,
+      agenda: data.agenda || '',
       participantIds: data.participantIds,
       decisions: [],
       relatedItemId: data.relatedItemId || null,
       createdBy: user?.id || '',
     });
 
-    // Auto-create correspondence items for each decision
-    decisions.forEach((dec) => {
-      const newItem = addItem({
+    // Each decision automatically creates a follow-up item in the decisions module
+    data.decisions.forEach((dec) => {
+      const newItemId = addItem({
         referenceNumber: null,
         type: 'decision',
         subject: dec.content,
-        description: `مصوبه جلسه: ${data.title}`,
+        description: `مصوبه جلسه «${data.title}» مورخ ${toJalali(datetime)}`,
         issuerName: data.title,
-        issuerUnit: 'دفتر معاونت',
+        issuerUnit: units.find((u) => u.id === dec.responsibleUnitId)?.name || '',
         targetUnitId: dec.responsibleUnitId,
-        issueDate: jalaliToIso(data.datetime),
+        issueDate: datetime,
         deadline: jalaliToIso(dec.deadline),
         priority: 'important',
         attachmentPath: null,
@@ -91,63 +110,47 @@ export default function MeetingsPage() {
         qualityAccuracy: null,
         qualityDocumentation: null,
       });
-      // Link decision to the new correspondence item
-      useMeetingStore.setState((state) => ({
-        meetings: state.meetings.map((m) =>
-          m.id === newMeeting.id
-            ? {
-                ...m,
-                decisions: [
-                  ...m.decisions,
-                  {
-                    id: `d${Date.now()}_${Math.random()}`,
-                    meetingId: m.id,
-                    content: dec.content,
-                    responsibleUnitId: dec.responsibleUnitId,
-                    deadline: jalaliToIso(dec.deadline),
-                    correspondenceItemId: newItem,
-                  },
-                ],
-              }
-            : m,
-        ),
-      }));
+
+      addDecision(newMeeting.id, {
+        content: dec.content,
+        responsibleUnitId: dec.responsibleUnitId,
+        deadline: jalaliToIso(dec.deadline),
+        correspondenceItemId: newItemId,
+      });
     });
 
-    setDecisions([]);
-    reset();
     setShowForm(false);
   };
 
-  const addDecisionRow = () => {
-    setDecisions([...decisions, { content: '', responsibleUnitId: '', deadline: todayJalali() }]);
-  };
+  const visibleMeetings =
+    user?.role === 'admin'
+      ? meetings
+      : meetings.filter(
+          (m) =>
+            m.participantIds.includes(user?.id || '') || m.createdBy === user?.id,
+        );
 
-  const removeDecisionRow = (idx: number) => {
-    setDecisions(decisions.filter((_, i) => i !== idx));
-  };
-
-  const updateDecisionRow = (idx: number, field: string, value: string) => {
-    setDecisions(
-      decisions.map((d, i) => (i === idx ? { ...d, [field]: value } : d)),
-    );
-  };
+  const sortedMeetings = [...visibleMeetings].sort(
+    (a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime(),
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">مدیریت جلسات</h1>
-          <p className="text-gray-500 mt-1">{visibleMeetings.length} جلسه ثبت شده</p>
+          <p className="text-gray-500 mt-1">
+            {sortedMeetings.length} جلسه — زیرمجموعه پیگیری‌ها
+          </p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
+        <button onClick={openNew} className="btn-primary">
           <Plus size={18} />
           ثبت جلسه جدید
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {visibleMeetings.map((meeting) => {
+        {sortedMeetings.map((meeting) => {
           const participants = meeting.participantIds
             .map((id) => users.find((u) => u.id === id))
             .filter(Boolean);
@@ -164,6 +167,7 @@ export default function MeetingsPage() {
                   <button
                     onClick={() => setViewMeeting(meeting)}
                     className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-primary-600 transition-colors"
+                    title="مشاهده"
                   >
                     <Eye size={16} />
                   </button>
@@ -171,6 +175,7 @@ export default function MeetingsPage() {
                     <button
                       onClick={() => setDeleteId(meeting.id)}
                       className="p-1.5 rounded-lg hover:bg-danger-50 text-gray-500 hover:text-danger-600 transition-colors"
+                      title="حذف"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -180,33 +185,39 @@ export default function MeetingsPage() {
               <h3 className="font-bold text-gray-800 mb-2 line-clamp-1">{meeting.title}</h3>
               <div className="space-y-1.5 text-sm text-gray-500">
                 <div className="flex items-center gap-2">
-                  <Clock size={14} />
-                  {toJalaliWithTime(meeting.datetime)}
+                  <Clock size={14} className="shrink-0" />
+                  <span>{toJalaliWithTime(meeting.datetime)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MapPin size={14} />
-                  {meeting.location}
+                  <MapPin size={14} className="shrink-0" />
+                  <span className="truncate">{meeting.location}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Users size={14} />
-                  {participants.length} شرکت‌کننده
+                  <Users size={14} className="shrink-0" />
+                  <span>{participants.length} شرکت‌کننده</span>
                 </div>
                 {meeting.decisions.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <ClipboardList size={14} />
-                    {meeting.decisions.length} مصوبه
+                  <div className="flex items-center gap-2 text-accent-700">
+                    <ClipboardList size={14} className="shrink-0" />
+                    <span>{meeting.decisions.length} مصوبه (تبدیل به پیگیری)</span>
                   </div>
                 )}
                 {meeting.relatedItemId && (
                   <div className="flex items-center gap-2 text-primary-600">
-                    <Link2 size={14} />
-                    پیوند به پیگیری
+                    <Link2 size={14} className="shrink-0" />
+                    <span>پیوند به پیگیری</span>
                   </div>
                 )}
               </div>
             </div>
           );
         })}
+        {sortedMeetings.length === 0 && (
+          <div className="card p-12 col-span-full flex flex-col items-center gap-3 text-gray-400">
+            <CalendarDays size={40} />
+            <p className="text-sm">جلسه‌ای ثبت نشده است</p>
+          </div>
+        )}
       </div>
 
       <Modal open={showForm} onClose={() => setShowForm(false)} title="ثبت جلسه جدید" size="xl">
@@ -214,35 +225,80 @@ export default function MeetingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="label">عنوان جلسه</label>
-              <input {...register('title', { required: 'عنوان الزامی است' })} className={`input ${errors.title ? 'input-error' : ''}`} placeholder="عنوان" />
+              <input
+                {...register('title')}
+                className={`input ${errors.title ? 'input-error' : ''}`}
+                placeholder="عنوان جلسه"
+              />
+              {errors.title && <p className="text-danger-600 text-xs mt-1">{errors.title.message}</p>}
             </div>
             <div>
               <label className="label">مکان</label>
-              <input {...register('location', { required: 'مکان الزامی است' })} className={`input ${errors.location ? 'input-error' : ''}`} placeholder="مکان جلسه" />
+              <input
+                {...register('location')}
+                className={`input ${errors.location ? 'input-error' : ''}`}
+                placeholder="مکان جلسه"
+              />
+              {errors.location && (
+                <p className="text-danger-600 text-xs mt-1">{errors.location.message}</p>
+              )}
             </div>
-            <div>
-              <label className="label">تاریخ و ساعت (جلالی)</label>
-              <input {...register('datetime', { required: 'تاریخ الزامی است' })} className={`input ${errors.datetime ? 'input-error' : ''}`} placeholder="1404/07/01" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">تاریخ (جلالی)</label>
+                <input
+                  {...register('date')}
+                  className={`input ${errors.date ? 'input-error' : ''}`}
+                  placeholder="۱۴۰۴/۰۷/۰۱"
+                />
+                {errors.date && <p className="text-danger-600 text-xs mt-1">{errors.date.message}</p>}
+              </div>
+              <div>
+                <label className="label">ساعت</label>
+                <input
+                  {...register('time')}
+                  dir="ltr"
+                  className={`input text-left ${errors.time ? 'input-error' : ''}`}
+                  placeholder="08:00"
+                />
+                {errors.time && <p className="text-danger-600 text-xs mt-1">{errors.time.message}</p>}
+              </div>
             </div>
             <div>
               <label className="label">مدت (دقیقه)</label>
               <input type="number" {...register('duration')} className="input" />
+              {errors.duration && (
+                <p className="text-danger-600 text-xs mt-1">{errors.duration.message}</p>
+              )}
             </div>
             <div>
-              <label className="label">پیوند به پیگیری (اختیاری)</label>
+              <label className="label">پیوند به پیگیری موجود (اختیاری)</label>
               <select {...register('relatedItemId')} className="input">
                 <option value="">بدون پیوند</option>
                 {items.map((item) => (
-                  <option key={item.id} value={item.id}>{item.subject}</option>
+                  <option key={item.id} value={item.id}>
+                    {item.subject}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="md:col-span-2">
               <label className="label">دستور جلسه</label>
-              <textarea {...register('agenda')} className="input min-h-[80px]" placeholder="دستور جلسه" />
+              <textarea
+                {...register('agenda')}
+                className="input min-h-[80px]"
+                placeholder="دستور جلسه"
+              />
             </div>
             <div className="md:col-span-2">
-              <label className="label">شرکت‌کنندگان</label>
+              <label className="label">
+                شرکت‌کنندگان
+                {errors.participantIds && (
+                  <span className="text-danger-600 text-xs mr-2">
+                    {errors.participantIds.message}
+                  </span>
+                )}
+              </label>
               <div className="flex flex-wrap gap-2">
                 {users.map((u) => (
                   <label
@@ -264,49 +320,64 @@ export default function MeetingsPage() {
             </div>
           </div>
 
+          {/* Decisions */}
           <div className="border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-semibold text-gray-700">مصوبات جلسه</label>
-              <button type="button" onClick={addDecisionRow} className="btn-ghost text-sm">
+              <div>
+                <label className="text-sm font-semibold text-gray-700">مصوبات جلسه</label>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  هر مصوبه به صورت خودکار یک پیگیری در ماژول مصوبات ایجاد می‌کند
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => append({ content: '', responsibleUnitId: '', deadline: todayJalali() })}
+                className="btn-ghost text-sm"
+              >
                 <Plus size={16} />
                 افزودن مصوبه
               </button>
             </div>
             <div className="space-y-3">
-              {decisions.map((dec, idx) => (
-                <div key={idx} className="flex flex-col md:flex-row gap-2 bg-gray-50 rounded-lg p-3">
-                  <input
-                    value={dec.content}
-                    onChange={(e) => updateDecisionRow(idx, 'content', e.target.value)}
-                    className="input flex-1"
-                    placeholder="محتوای مصوبه"
-                  />
-                  <select
-                    value={dec.responsibleUnitId}
-                    onChange={(e) => updateDecisionRow(idx, 'responsibleUnitId', e.target.value)}
-                    className="input md:w-48"
-                  >
-                    <option value="">واحد مسئول</option>
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    value={dec.deadline}
-                    onChange={(e) => updateDecisionRow(idx, 'deadline', e.target.value)}
-                    className="input md:w-32"
-                    placeholder="مهلت"
-                  />
+              {fields.map((field, idx) => (
+                <div
+                  key={field.id}
+                  className="flex flex-col md:flex-row gap-2 bg-gray-50 rounded-lg p-3"
+                >
+                  <div className="flex-1">
+                    <input
+                      {...register(`decisions.${idx}.content` as const)}
+                      className="input"
+                      placeholder="محتوای مصوبه"
+                    />
+                  </div>
+                  <div className="md:w-44">
+                    <select {...register(`decisions.${idx}.responsibleUnitId` as const)} className="input">
+                      <option value="">واحد مسئول</option>
+                      {units.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:w-32">
+                    <input
+                      {...register(`decisions.${idx}.deadline` as const)}
+                      className="input"
+                      placeholder="مهلت (۱۴۰۴/۰۷/۱۵)"
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => removeDecisionRow(idx)}
-                    className="p-2.5 rounded-lg hover:bg-danger-50 text-gray-400 hover:text-danger-600 transition-colors shrink-0"
+                    onClick={() => remove(idx)}
+                    className="p-2.5 rounded-lg hover:bg-danger-50 text-gray-400 hover:text-danger-600 transition-colors shrink-0 self-start"
                   >
                     <Trash2 size={18} />
                   </button>
                 </div>
               ))}
-              {decisions.length === 0 && (
+              {fields.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-4">
                   مصوبه‌ای اضافه نشده است
                 </p>
@@ -315,8 +386,12 @@ export default function MeetingsPage() {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">انصراف</button>
-            <button type="submit" className="btn-primary flex-1">ثبت جلسه</button>
+            <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">
+              انصراف
+            </button>
+            <button type="submit" className="btn-primary flex-1">
+              ثبت جلسه
+            </button>
           </div>
         </form>
       </Modal>
@@ -327,15 +402,23 @@ export default function MeetingsPage() {
             <div>
               <h3 className="text-lg font-bold text-gray-800">{viewMeeting.title}</h3>
               <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
-                <span className="flex items-center gap-1.5"><Clock size={14} /> {toJalaliWithTime(viewMeeting.datetime)}</span>
-                <span className="flex items-center gap-1.5"><MapPin size={14} /> {viewMeeting.location}</span>
-                <span className="flex items-center gap-1.5"><Users size={14} /> {viewMeeting.participantIds.length} نفر</span>
+                <span className="flex items-center gap-1.5">
+                  <Clock size={14} /> {toJalaliWithTime(viewMeeting.datetime)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <MapPin size={14} /> {viewMeeting.location}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Users size={14} /> {viewMeeting.participantIds.length} نفر
+                </span>
               </div>
             </div>
 
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-1">دستور جلسه</p>
-              <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{viewMeeting.agenda}</p>
+              <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                {viewMeeting.agenda || '—'}
+              </p>
             </div>
 
             <div>
@@ -345,11 +428,16 @@ export default function MeetingsPage() {
                   const p = users.find((u) => u.id === id);
                   if (!p) return null;
                   return (
-                    <div key={id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+                    <div
+                      key={id}
+                      className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5"
+                    >
                       <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold">
                         {p.firstName[0]}
                       </div>
-                      <span className="text-sm text-gray-700">{p.firstName} {p.lastName}</span>
+                      <span className="text-sm text-gray-700">
+                        {p.firstName} {p.lastName}
+                      </span>
                     </div>
                   );
                 })}
@@ -363,11 +451,20 @@ export default function MeetingsPage() {
                   {viewMeeting.decisions.map((dec) => {
                     const unit = units.find((u) => u.id === dec.responsibleUnitId);
                     return (
-                      <div key={dec.id} className="bg-accent-50 rounded-lg p-3 border-r-2 border-accent-500">
+                      <div
+                        key={dec.id}
+                        className="bg-accent-50 rounded-lg p-3 border-r-2 border-accent-500"
+                      >
                         <p className="text-sm text-gray-700 mb-1">{dec.content}</p>
                         <div className="flex items-center gap-3 text-xs text-gray-500">
                           <span>مسئول: {unit?.name}</span>
                           <span>مهلت: {toJalali(dec.deadline)}</span>
+                          {dec.correspondenceItemId && (
+                            <span className="text-primary-600 flex items-center gap-1">
+                              <Link2 size={12} />
+                              پیگیری ایجاد شد
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -384,7 +481,7 @@ export default function MeetingsPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={() => deleteId && deleteMeeting(deleteId)}
         title="حذف جلسه"
-        message="آیا از حذف این جلسه اطمینان دارید؟"
+        message="آیا از حذف این جلسه اطمینان دارید؟ مصوبات ایجادشده در ماژول پیگیری‌ها باقی می‌مانند."
         confirmLabel="حذف"
       />
     </div>
